@@ -1,0 +1,62 @@
+# Git attributes for consistent line endings across platforms
+
+# Auto detect text files and normalize line endings to LF
+* text=auto
+
+# Python files
+*.py text eol=lf
+*.pyx text eol=lf
+*.pyi text eol=lf
+
+# Shell scripts
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Windows batch files
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Documentation
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
+
+# Configuration files
+.env* text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+
+# Binary files - don't try to merge
+*.pth binary
+*.pt binary
+*.bin binary
+*.safetensors binary
+*.pkl binary
+*.pickl binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+
+# Model files (for Git LFS if using)
+*.model binary
+*.weights binary
+
+# Archives
+*.zip binary
+*.tar binary
+*.gz binary
+*.rar binary
+*.7z binary
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary

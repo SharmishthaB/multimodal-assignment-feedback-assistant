@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # Main MAFA application
+  mafa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mafa-app
+    ports:
+      - "7860:7860"
+    environment:
+      - DEVICE=cuda
+      - LOAD_IN_4BIT=true
+      - LOG_LEVEL=INFO
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: PostgreSQL for storing analysis history
+  postgres:
+    image: postgres:15-alpine
+    container_name: mafa-db
+    environment:
+      POSTGRES_USER: mafa
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mafa_secure_password_change_me}
+      POSTGRES_DB: mafa
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    profiles:
+      - with-db
+
+  # Optional: Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: mafa-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    profiles:
+      - with-cache
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: mafa-network
