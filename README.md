@@ -1,151 +1,74 @@
-# MAFA — Multimodal Assignment Feedback Assistant
+# MAFA - Full Stack Web App
 
-**AI-powered assignment grading & Socratic coaching using Vision-Language Models, RAG, and fine-tuned LLMs**
+Assignment grading system with React frontend, Node backend, and ML pipeline for feedback generation.
 
-## 🎯 Quick Links
+## Overview
 
-📖 **[Full Documentation](docs/README.md)** | 🚀 **[Setup Guide](docs/SETUP.md)** | 📚 **[API Reference](docs/API.md)**
+MAFA combines a modern web interface with AI-powered assignment grading. Students upload assignments, the system extracts text, analyzes it against rubrics, and generates feedback.
 
----
+### Architecture
 
-## What is MAFA?
+```
+React Frontend    Express API    Python ML Service    PostgreSQL
+     ↓                ↓                  ↓                ↓
+  :5173            :3000             :8000          (Supabase)
+```
 
-MAFA is an intelligent system that helps instructors grade assignments at scale while maintaining personalized, pedagogically-sound feedback. It combines:
+- **Frontend**: React + TypeScript with Vite
+- **Backend**: Express API with Supabase auth
+- **ML**: Python pipeline for analysis (Vision models, LLMs, RAG)
+- **Database**: PostgreSQL via Supabase
 
-- 📷 **Vision-Language Model** (Qwen2-VL) for handwritten/printed text extraction
-- 🔍 **Semantic Search** (ChromaDB) for rubric retrieval
-- 🧠 **Fine-tuned LLM** (Phi-3) for structured grading
-- 💬 **Socratic Coaching** engine for follow-up questions
+## Tech
 
-**Perfect for:** ML/AI course instructors who want to provide detailed, consistent feedback at scale.
+- Frontend: React, TypeScript, Vite, React Router
+- Backend: Express, TypeScript, Zod for validation
+- Database: Supabase (PostgreSQL + Auth)
+- ML: Python, Qwen2-VL, Phi-3, LangGraph, ChromaDB
+- DevOps: Docker, Docker Compose, GitHub Actions
 
----
+## Project Structure
 
-## ⚡ Quick Start
+```
+mafa/
+├── frontend/       React UI
+├── backend/        Express API
+├── ml-service/     Python ML pipeline
+├── packages/       Shared types
+├── docker-compose.yml
+└── .env.example
+```
+
+## Quick Start
 
 ```bash
-# 1. Clone
-git clone https://github.com/SharmishthaB/genai-multimodal-assignment-feedback-assistant.git
-cd genai-multimodal-assignment-feedback-assistant
-
-# 2. Setup
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# 3. Configure
-cp .env.example .env
-# Edit .env with your settings (DEVICE=cuda recommended)
-
-# 4. Build vector DB
-python build_chromadb.py
-
-# 5. Run!
-python app.py
+npm install
+npm run dev          # Start frontend + backend
+npm run dev:frontend # Frontend only
+npm run dev:backend  # Backend only
 ```
 
-Visit **http://localhost:7860**
+### Environment
 
----
+Copy `.env.example` to `.env` and add Supabase credentials.
 
-## 🏗️ Tech Stack
+## Docker
 
-| Layer | Technology |
-|-------|-----------|
-| **UI** | Gradio 4.x |
-| **Vision** | Qwen2-VL-7B |
-| **RAG** | ChromaDB + Embeddings |
-| **LLM** | Phi-3 (fine-tuned) |
-| **Orchestration** | LangGraph |
-| **Quantization** | bitsandbytes 4-bit |
-| **Fine-tuning** | Unsloth + LoRA |
-
----
-
-## 📂 Project Structure
-
-```
-├── src/                    # Core modules (vision, LLM, RAG)
-├── config/                 # Configuration & constants
-├── data/                   # Rubrics, datasets, embeddings
-├── tests/                  # Test suite
-├── docs/                   # Comprehensive documentation
-├── app.py                  # Gradio UI entry point
-├── requirements.txt        # Python dependencies
-├── Dockerfile              # Docker configuration
-├── docker-compose.yml      # Multi-service setup
-└── .env.example            # Environment template
-```
-
----
-
-## 🚀 Deployment
-
-### Local (Recommended for Development)
-```bash
-python app.py
-```
-
-### Docker (CPU)
-```bash
-docker build -t mafa:latest .
-docker run -it -p 7860:7860 mafa:latest
-```
-
-### Docker with GPU
-```bash
-docker run -it --gpus all -p 7860:7860 mafa:latest
-```
-
-### Docker Compose
 ```bash
 docker-compose up --build
 ```
 
-### Cloud Deployment
-- **HuggingFace Spaces** (recommended, free GPU tier)
-- **Render, Railway, AWS EC2** (see [docs/README.md](docs/README.md#-deployment) for guides)
+## Development
 
----
+- M1 ✅ Project setup
+- M2 ⏳ Frontend UI (auth, dashboard, components)
+- M3 📅 Backend API + database
+- M4 📅 Tests and CI
+- M5 📅 Deploy
+- M6 📅 Polish
 
-## 📖 Documentation
+## Docs
 
-- **[Full README](docs/README.md)** — Features, architecture, overview
-- **[Setup Guide](docs/SETUP.md)** — Installation, configuration, troubleshooting
-- **[API Reference](docs/API.md)** — Component documentation, code examples
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit changes (`git commit -m 'Add feature'`)
-4. Push (`git push origin feature/your-feature`)
-5. Open a Pull Request
-
----
-
-## 📋 Features
-
-✅ Multi-format support (PDF, PNG, JPG, handwritten)  
-✅ Rubric-aligned grading  
-✅ Socratic follow-up questions  
-✅ Evidence extraction & highlighting  
-✅ Custom rubric definitions  
-✅ Fine-tuning support  
-✅ Docker ready  
-✅ Gradio web UI  
-
----
-
-## 🙋 Support
-
-- **Issues**: [GitHub Issues](https://github.com/SharmishthaB/genai-multimodal-assignment-feedback-assistant/issues)
-- **Questions**: Open a discussion or issue
-
----
-
-**Made with ❤️ for educators**
+- [ARCHITECTURE.md](./ARCHITECTURE.md) - System design
+- [frontend/README.md](./frontend/README.md) - Frontend setup
+- [backend/README.md](./backend/README.md) - API docs
