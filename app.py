@@ -1,75 +1,38 @@
 """
 MAFA (Multimodal Assignment Feedback Assistant) — Gradio UI
-UPGRADE: LangGraph pipeline reintegrated; state properly passed; debug tab improved.
+============================================================
+Lightweight presentation layer that interacts with the deep FeedbackPipeline.
+Runs on Kaggle with Unsloth 4-bit CUDA models, and runs locally/on Hugging Face
+Spaces with lightweight mock/API adapters for free portfolio demonstrations.
 """
-import os
-os.environ["UNSLOTH_COMPLIED_CACHE"] = "/kaggle/working/unsloth_cache"
-os.makedirs("/kaggle/working/unsloth_cache", exist_ok=True)
 
-import unsloth
-from unsloth import FastLanguageModel
-import gradio as gr
+import os
 import json
 import logging
-import torch
 from pathlib import Path
 from typing import Optional, Tuple
 
-from dev_b.dev_b import (
-    VisionTranscriber, ChromaRetriever,
-    build_pipeline, StructuredLLMAnalyzer, SocraticCoach
-)
+import gradio as gr
+
+from src.config import TOPICS, IS_KAGGLE
+from src.pipeline import FeedbackPipeline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# LOAD MODEL
+# INITIALIZE DEEP PIPELINE
 # ============================================================================
-base_model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name="/kaggle/working/phi_3",
-    load_in_4bit=True,
-    device_map="auto",
-    max_seq_length=4096,
-    dtype=None,
-)
-FastLanguageModel.for_inference(base_model)
+logger.info(f"Initializing FeedbackPipeline (Runtime: {'Kaggle GPU' if IS_KAGGLE else 'Local/Cloud Demo'})...")
 
-# ============================================================================
-# INITIALIZE COMPONENTS
-# ============================================================================
-analyzer  = StructuredLLMAnalyzer(base_model, tokenizer)
-coach     = SocraticCoach(base_model, tokenizer)
-vlm       = VisionTranscriber()
-retriever = ChromaRetriever("/kaggle/working/chromadb")
+if IS_KAGGLE:
+    pipeline = FeedbackPipeline.from_kaggle()
+else:
+    # Graceful fallback for local development, CI testing, and free Hugging Face Spaces
+    pipeline = FeedbackPipeline.from_mock()
 
-# UPGRADE: LangGraph pipeline reintegrated — used as primary path
-pipeline = build_pipeline(vlm, analyzer, coach, retriever)
-logger.info("✅ Pipeline ready (LangGraph + direct fallback)")
+logger.info("✅ FeedbackPipeline ready")
 
-# ============================================================================
-# TOPICS & CONFIG
-# ============================================================================
-TOPICS = [
-    "Decision Trees",
-    "Backpropagation",
-    "Forward Propagation",
-    "SVM - Hard Margin",
-    "SVM - Soft Margin",
-    "Naive Bayes",
-    "HMM - Likelihood Problem",
-    "HMM - Decoding Problem",
-    "HMM - Learning Problem",
-    "EM Algorithm",
-    "K-Means Clustering",
-    "CNN Trainable Parameters",
-    "Random Forest",
-    "Bagging & Boosting",
-    "Gradient Boosting",
-    "Logistic Regression",
-    "Performance Metrics",
-    "PCA / SVD",
-]
 
 # ============================================================================
 # HANDLERS
@@ -92,52 +55,17 @@ def analyze_submission(
 
     try:
         logger.info(f"Processing submission for topic: {selected_topic}")
+        image_path = uploaded_file.name if has_file else None
 
-        # ── STAGE 1: Transcribe (if image provided) ──────────────────────────
-        import re
-        transcribed = input_text.strip() if has_text else ""
-
-        if has_file:
-            logger.info(f"Transcribing image: {uploaded_file.name}")
-            transcribed = vlm.transcribe(uploaded_file.name)
-            transcribed = re.sub(r'(\s*\\+\(\\+quad\\+\)\s*){2,}', ' ', transcribed)
-            transcribed = re.sub(r'(\\quad\s*){2,}', ' ', transcribed)
-            transcribed = re.sub(r'\s{3,}', ' ', transcribed).strip()
-            logger.info(f"Transcription complete: {len(transcribed)} chars")
-
-        # ── STAGE 2: Retrieve ─────────────────────────────────────────────────
-        logger.info(f"Retrieving rubric rules for topic: {selected_topic}")
-        rubric_rules    = retriever.retrieve_rubric(selected_topic, transcribed)
-        lecture_context = retriever.retrieve_context(selected_topic)
-        logger.info(f"Retrieved {len(rubric_rules)} rubric rules")
-
-        # ── STAGE 3: Build state ──────────────────────────────────────────────
-        state = {
-            "topic":            selected_topic,
-            "transcribed_text": transcribed,
-            "rubric_rules":     rubric_rules,
-            "lecture_context":  lecture_context,
-            "image_path":       uploaded_file.name if has_file else None,
-        }
-
-        # ── STAGE 4: Analyze ─────────────────────────────────────────────────
-        logger.info("Running error analysis...")
-        error_analysis    = analyzer.analyze(state)
-        state["error_analysis"] = error_analysis
-        logger.info(
-            f"Analysis complete — Score: {error_analysis.get('rubric_score', 'N/A')}, "
-            f"Violations: {len(error_analysis.get('violated_rules', []))}"
+        result = pipeline.run(
+            student_work=input_text if has_text else "",
+            topic=selected_topic,
+            image_path=image_path,
         )
 
-        # ── STAGE 5: Coach ───────────────────────────────────────────────────
-        logger.info("Generating feedback...")
-        feedback_card = coach.coach(state)
-        feedback_card = feedback_card.replace("\\n", "\n").strip()
-
-        error_json = json.dumps(error_analysis, indent=2)
+        error_json = json.dumps(result.error_analysis, indent=2)
         logger.info("✅ Submission processing complete")
-
-        return feedback_card, transcribed, error_json
+        return result.feedback_card, result.transcribed_text, error_json
 
     except Exception as e:
         logger.error(f"Error processing submission: {str(e)}", exc_info=True)
@@ -204,12 +132,12 @@ Upload your handwritten solution to a machine learning problem. Our system will:
                 )
 
                 gr.Markdown("### ⚙️ Options")
-                show_rubric_ref  = gr.Checkbox(label="Show rubric rule references", value=True)
-                show_timestamps  = gr.Checkbox(label="Show transcribed text & error analysis (debug)", value=False)
+                show_rubric_ref = gr.Checkbox(label="Show rubric rule references", value=True)
+                show_timestamps = gr.Checkbox(label="Show transcribed text & error analysis (debug)", value=False)
 
                 gr.Markdown("### 🎬 Actions")
                 submit_btn = gr.Button("📤 Get Feedback", variant="primary", size="lg")
-                reset_btn  = gr.Button("🔄 Clear Form", variant="secondary")
+                reset_btn = gr.Button("🔄 Clear Form", variant="secondary")
 
                 gr.Markdown("""
 ### ℹ️ Tips for Best Results
@@ -217,9 +145,8 @@ Upload your handwritten solution to a machine learning problem. Our system will:
 - **Show your work**: Include all derivation steps
 - **Label everything**: Mark variables, equations, and steps
 - **Include diagrams**: Hand-drawn sketches are okay
-- **Annotation notes**: Any clarifications you wrote help
 
-**Processing time:** ~30-60 seconds
+**Processing time:** ~30-60 seconds on GPU (instant in mock demo)
 """)
 
             with gr.Column(scale=1.2, min_width=400):
@@ -242,8 +169,8 @@ Upload your handwritten solution to a machine learning problem. Our system will:
 MAFA combines:
 - **Qwen2-VL-7B** for multimodal handwritten math transcription
 - **ChromaDB RAG** for rubric-aligned error detection
-- **Fine-tuned Phi-3-mini** for Socratic hint generation
-- **LangGraph** orchestration for reliable agent workflows
+- **Fine-tuned Phi-3-mini (LoRA)** for Socratic hint generation
+- **Anti-Leakage Guardrails** for strict zero-answer pedagogical enforcement
 """)
 
         submit_btn.click(
@@ -264,4 +191,4 @@ MAFA combines:
 if __name__ == "__main__":
     logger.info("🚀 Starting MAFA...")
     demo = build_interface()
-    demo.launch(share=True, server_name="0.0.0.0", server_port=7860, debug=True, show_error=True)
+    demo.launch(share=False, server_name="0.0.0.0", server_port=7860, debug=True)
