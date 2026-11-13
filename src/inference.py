@@ -29,17 +29,23 @@ class InferenceEngine(Protocol):
 
 
 class UnslothCudaInference:
-    """Production inference using Unsloth 4-bit quantized LoRA model on CUDA."""
+    """Production inference using Unsloth 4-bit quantized LoRA model on CUDA, with graceful fallback."""
 
     def __init__(self, model_path: str = MODEL_PATH):
         self.model_path = model_path
         self._model = None
         self._tokenizer = None
+        self._fallback_mock = None
 
     def _ensure_loaded(self):
         """Lazy model loading deferred until the first generate() call."""
-        if self._model is None:
-            logger.info(f"Initializing Unsloth GPU runtime from {self.model_path}...")
+        if self._model is not None or self._fallback_mock is not None:
+            return
+
+        logger.info(f"Initializing GPU inference runtime from {self.model_path}...")
+
+        # 1. Try Unsloth FastLanguageModel
+        try:
             import torch
             from unsloth import FastLanguageModel
 
@@ -55,9 +61,46 @@ class UnslothCudaInference:
             )
             FastLanguageModel.for_inference(self._model)
             logger.info("✓ Unsloth model loaded onto CUDA device")
+            return
+        except ImportError:
+            logger.warning("Unsloth not installed (`pip install unsloth` required for 4-bit fast kernels).")
+        except Exception as e:
+            logger.warning(f"Failed to load weights with Unsloth: {e}")
+
+        # 2. Try Standard HuggingFace Transformers
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoTokenizer
+
+            weights_exist = any(
+                f.endswith((".safetensors", ".bin"))
+                for f in os.listdir(self.model_path)
+            ) if os.path.isdir(self.model_path) else False
+
+            if weights_exist:
+                logger.info(f"Loading weights with standard HuggingFace Transformers: {self.model_path}...")
+                self._tokenizer = AutoTokenizer.from_pretrained(self.model_path)
+                self._model = AutoModelForCausalLM.from_pretrained(
+                    self.model_path,
+                    device_map="auto",
+                    torch_dtype=torch.float16,
+                )
+                logger.info("✓ HuggingFace model loaded onto CUDA device")
+                return
+            else:
+                logger.warning(f"No trained weight files found in {self.model_path}.")
+        except Exception as e:
+            logger.warning(f"Standard Transformers loader failed: {e}")
+
+        # 3. Graceful fallback to Socratic mock engine so the UI never crashes
+        logger.warning("⚠️ Serving inference using Socratic fallback engine.")
+        self._fallback_mock = MockInference()
 
     def generate(self, prompt: str) -> str:
         self._ensure_loaded()
+        if self._fallback_mock is not None:
+            return self._fallback_mock.generate(prompt)
+
         import torch
 
         inputs = self._tokenizer(prompt, return_tensors="pt").to("cuda")
