@@ -189,6 +189,7 @@ MAFA combines:
 
 
 if __name__ == "__main__":
-    logger.info("🚀 Starting MAFA...")
+    logger.info("🚀 Starting MAFA UI...")
     demo = build_interface()
-    demo.launch(share=False, server_name="0.0.0.0", server_port=7860, debug=True)
+    # On Kaggle, share=True creates a public gradio.live URL accessible from your browser
+    demo.launch(share=IS_KAGGLE, server_name="0.0.0.0", server_port=7860, debug=True)
