@@ -47,6 +47,20 @@ class TestFeedbackPipeline(unittest.TestCase):
         self.assertGreater(len(result.feedback_card), 20)
         self.assertIn("Backpropagation", result.error_analysis.get("topic", ""))
 
+    def test_mock_pipeline_topic_adaptation(self):
+        """Verifies mock inference dynamically adapts to topics like HMM Decoding."""
+        result = self.pipeline.run(
+            student_work="Viterbi algorithm t=1 sunny 0.53 rainy 0.13 v2(sunny)=max(...)",
+            topic="HMM - Decoding Problem",
+        )
+        self.assertEqual(result.topic, "HMM - Decoding Problem")
+        self.assertEqual(result.error_analysis.get("topic"), "HMM - Decoding Problem")
+        violations = result.error_analysis.get("violated_rules", [])
+        self.assertGreaterEqual(len(violations), 1)
+        self.assertTrue(violations[0]["rule_id"].startswith("HMM_D"))
+        self.assertIn("HMM - Decoding Problem", result.feedback_card)
+        self.assertNotIn("Backpropagation", result.feedback_card)
+
     def test_clean_rule_id(self):
         """Verifies robust normalization of diverse model rule_id formats."""
         clean = FeedbackPipeline._clean_rule_id

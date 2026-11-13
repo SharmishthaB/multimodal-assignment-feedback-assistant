@@ -9,6 +9,7 @@ Supports:
 """
 
 import os
+import re
 import json
 import logging
 from typing import Protocol, Optional
@@ -156,33 +157,118 @@ class ServerlessAPIInference:
 
 
 class MockInference:
-    """Mock inference adapter for unit testing and $0 live showcase demos."""
+    """
+    Mock inference adapter for unit testing, offline verification,
+    and $0 live showcase demos. Dynamically adapts to the requested topic
+    and prompt-provided rubric rules instead of returning a static topic.
+    """
 
     def generate(self, prompt: str) -> str:
+        # Extract requested topic from prompt if present
+        topic_match = re.search(r"Topic:\s*([^\n\r<]+)", prompt)
+        topic = topic_match.group(1).strip() if topic_match else "Backpropagation"
+
         if "Diagnostic Evaluator" in prompt or "violated_rules" in prompt:
+            # Extract rubric rules cited in the prompt if available
+            rule_matches = re.findall(
+                r"\[([A-Z]{2,5}(?:_[A-Z]{1,4})*_\d{3})\]\s*([^\n\r\(]+)", prompt
+            )
+            common_errors = re.findall(r"Common Error:\s*([^\n\r]+)", prompt)
+
+            if rule_matches:
+                target_idx = 1 if len(rule_matches) > 1 else 0
+                target_rule_id, target_subtopic = rule_matches[target_idx]
+                target_rule_id = target_rule_id.strip()
+                target_subtopic = target_subtopic.strip()
+                student_error = (
+                    common_errors[target_idx].strip()
+                    if target_idx < len(common_errors) and common_errors[target_idx].strip()
+                    else f"Discrepancy identified in {target_subtopic.lower()} step."
+                )
+            else:
+                target_rule_id = "BP_001" if "Backprop" in topic else "ML_001"
+                student_error = "Discrepancy identified in intermediate mathematical derivation."
+
+            # Generate topic-appropriate correct steps
+            topic_lower = topic.lower()
+            if "hmm" in topic_lower or "decoding" in topic_lower or "viterbi" in topic_lower:
+                correct_steps = [
+                    "Correctly initialized trellis base probabilities at t=1",
+                    "Calculated state transition and emission terms accurately",
+                ]
+            elif "tree" in topic_lower:
+                correct_steps = [
+                    "Accurately computed parent node entropy H(S)",
+                    "Correctly identified candidate split attributes",
+                ]
+            elif "bayes" in topic_lower:
+                correct_steps = [
+                    "Correctly computed prior class probabilities P(Y)",
+                    "Properly formulated likelihood products P(X|Y)",
+                ]
+            elif "svm" in topic_lower:
+                correct_steps = [
+                    "Correctly formulated geometric margin boundary constraints",
+                    "Identified candidate support vectors along margin plane",
+                ]
+            else:
+                correct_steps = [
+                    "Correctly computed forward pass activations",
+                    "Calculated output layer loss accurately",
+                ]
+
             return json.dumps({
-                "topic": "Backpropagation",
+                "topic": topic,
                 "violated_rules": [
                     {
-                        "rule_id": "BP_001",
-                        "student_error": "Applied direct output layer error formula to hidden layer weights.",
+                        "rule_id": target_rule_id,
+                        "student_error": student_error,
                         "severity": "major",
                     }
                 ],
-                "correct_steps": [
-                    "Correctly computed forward pass activations",
-                    "Calculated output layer loss accurately",
-                ],
+                "correct_steps": correct_steps,
                 "rubric_score": 1,
             })
         else:
+            # Socratic Coach response
+            hint_match = re.search(r"Hint seed[^:]*:\s*([^\n\r]+)", prompt)
+            hint_seed = hint_match.group(1).strip().strip('"').strip("'") if hint_match else ""
+
+            if hint_seed:
+                socratic_body = hint_seed
+            elif "hmm" in topic.lower() or "decoding" in topic.lower():
+                socratic_body = (
+                    "When computing the Viterbi trellis recursion, how do you determine which previous state "
+                    "transition maximizes the path probability? What role does the backpointer play when tracing "
+                    "back the optimal state sequence?"
+                )
+            elif "decision tree" in topic.lower():
+                socratic_body = (
+                    "When calculating information gain after an attribute split, how should the child node entropies "
+                    "be weighted? What base logarithm does information theory require for entropy calculations?"
+                )
+            elif "naive bayes" in topic.lower():
+                socratic_body = (
+                    "When computing the class posterior with Laplace smoothing, how does the smoothing parameter "
+                    "affect the denominator? Have you accounted for all vocabulary terms in the feature space?"
+                )
+            elif "svm" in topic.lower():
+                socratic_body = (
+                    "Which data points actively define the maximum margin hyperplane? "
+                    "How does changing the slack penalty or margin constraint alter the decision boundary?"
+                )
+            else:
+                socratic_body = (
+                    "When backpropagating from layer 2 into layer 1, you reused `δ = ŷ - y`. "
+                    "How does the error gradient change as it passes through an intermediate activation function? "
+                    "Which calculus rule connects hidden layer weight changes to the final network loss?"
+                )
+
             return (
-                "### 💡 Socratic Guidance\n\n"
-                "Great work getting the forward pass activations and output loss calculations right!\n\n"
-                "**Think about this step:**\n"
-                "When backpropagating from layer 2 into layer 1, you reused `δ = ŷ - y`. "
-                "How does the error gradient change as it passes through an intermediate activation function? "
-                "Which calculus rule connects hidden layer weight changes to the final network loss?"
+                f"### 💡 Socratic Guidance\n\n"
+                f"Great work working through the initial steps for **{topic}**!\n\n"
+                f"**Think about this step:**\n"
+                f"{socratic_body}"
             )
 
 
