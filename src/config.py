@@ -12,17 +12,42 @@ IS_KAGGLE = os.path.exists("/kaggle/working") or "KAGGLE_KERNEL_RUN_TYPE" in os.
 
 # Base paths
 ROOT_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_CHROMA_PATH = "/kaggle/working/chromadb" if IS_KAGGLE else str(ROOT_DIR / "chromadb")
-DEFAULT_MODEL_PATH = "/kaggle/working/phi_3" if IS_KAGGLE else str(ROOT_DIR / "phi_3")
-DEFAULT_RUBRIC_PATH = (
-    "/kaggle/input/datasets/sharmishthab/mafa-rubrics/ml_rubric.md"
-    if IS_KAGGLE
-    else str(ROOT_DIR / "ml_rubric.md")
-)
 
+def _resolve_rubric_path() -> str:
+    """Finds ml_rubric.md, prioritizing mounted datasets or falling back to the repo copy."""
+    if "RUBRIC_PATH" in os.environ and os.path.exists(os.environ["RUBRIC_PATH"]):
+        return os.environ["RUBRIC_PATH"]
+    candidates = [
+        "/kaggle/input/datasets/sharmishthab/mafa-rubrics/ml_rubric.md",
+        "/kaggle/input/mafa-rubrics/ml_rubric.md",
+        "/kaggle/working/ml_rubric.md",
+        str(ROOT_DIR / "ml_rubric.md"),
+        str(ROOT_DIR / "data" / "rubrics" / "ml_rubric.md"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return str(ROOT_DIR / "ml_rubric.md")
+
+def _resolve_model_path() -> str:
+    """Finds fine-tuned model path with fallback."""
+    if "MODEL_PATH" in os.environ and os.path.exists(os.environ["MODEL_PATH"]):
+        return os.environ["MODEL_PATH"]
+    candidates = [
+        "/kaggle/working/phi_3",
+        "/kaggle/input/phi-3",
+        "/kaggle/input/phi_3",
+        str(ROOT_DIR / "phi_3"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return "/kaggle/working/phi_3" if IS_KAGGLE else str(ROOT_DIR / "phi_3")
+
+DEFAULT_CHROMA_PATH = "/kaggle/working/chromadb" if IS_KAGGLE else str(ROOT_DIR / "chromadb")
 CHROMA_PATH = os.environ.get("CHROMA_PATH", DEFAULT_CHROMA_PATH)
-MODEL_PATH = os.environ.get("MODEL_PATH", DEFAULT_MODEL_PATH)
-RUBRIC_PATH = os.environ.get("RUBRIC_PATH", DEFAULT_RUBRIC_PATH)
+MODEL_PATH = _resolve_model_path()
+RUBRIC_PATH = _resolve_rubric_path()
 
 # Supported ML Curriculum Topics
 TOPICS: List[str] = [
